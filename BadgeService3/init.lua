@@ -156,7 +156,7 @@ local function onPlayerRemoved(plr)
 		if badgeProfile then
 			badgeProfile:Delete()
 		end
-	end
+	end)()
 end
 
 game.Players.PlayerRemoving:Connect(onPlayerRemoved)
