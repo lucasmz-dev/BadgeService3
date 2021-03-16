@@ -10,7 +10,7 @@ In the past I had created a module called BadgeService2, which was a really simp
 
 ## But WHY use it? Why do I need free badges?
 
-They can be used as normal badges, or to migrate later to actual badges. It woudn't be hard to do so either. It allows you to easily keep, and also create an illusion that someone got a badge, when did they didn't. For example, if you want to have an event, and keep a badge to the people who participated, you can do this with this. Later on, you can create an actual badge for it.
+They can be used as normal badges, or to migrate later to actual badges. It woudn't be hard to do so either. It allows you to easily keep, and also create an illusion that someone got a badge, when did they didn't. For example, if you want to have an event, and keep a badge to the people who participated, you can do that with BadgeService3. Later on, you can create an actual badge for it.
 
 ## How do I get this?
 
