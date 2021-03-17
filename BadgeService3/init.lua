@@ -21,6 +21,18 @@ local GlobalSettings = {
 	["NotificationTitle"] = "Badge Awarded!"
 }
 
+local function deepCopy(Table)
+	local copy = {};
+	for index, value in pairs(Table) do
+		if typeof(value) == "table" then
+			copy[index] = deepCopy(value)
+		else
+			copy[index] = value
+		end
+	end
+	return copy
+end
+
 local function clearTable(Table)
 	for index, value in pairs(Table) do
 		if typeof(value) == "table" then
@@ -72,7 +84,7 @@ function profileFunctions.AwardBadge(self, badgeId)
 	else
 		error('[BadgeService3]:  No badge named: "'.. badgeId.. '" was found. Have you typed it correctly?')
 	end
-	self.Connectors.onUpdate:Fire(self)
+	self.Connectors.onUpdate:Fire(deepCopy(self.Data))
 end
 
 function profileFunctions.RemoveBadge(self, badgeId)
@@ -83,7 +95,7 @@ function profileFunctions.RemoveBadge(self, badgeId)
 	else
 		error('[BadgeService3]:  No badge named: "'.. badgeId.. '" was found. Have you typed it correctly?')
 	end
-	self.Connectors.onUpdate:Fire(self)
+	self.Connectors.onUpdate:Fire(deepCopy(self.Data))
 end
 
 function profileFunctions.GetOwnedBadges(self)
@@ -118,7 +130,7 @@ function profileFunctions.Optimize(self)
 			self.Data[index] = nil
 		end
 	end 
-	self.Connectors.onUpdate:Fire(self)
+	self.Connectors.onUpdate:Fire(deepCopy(self.Data))
 end
 
 function profileFunctions.onUpdate(self, givenFunction)
