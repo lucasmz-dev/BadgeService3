@@ -21,18 +21,6 @@ local GlobalSettings = {
 	["NotificationTitle"] = "Badge Awarded!"
 }
 
-local function deepCopy(Table)
-	local copy = {};
-	for index, value in pairs(Table) do
-		if typeof(value) == "table" then
-			copy[index] = deepCopy(value)
-		else
-			copy[index] = value
-		end
-	end
-	return copy
-end
-
 local function clearTable(Table)
 	for index, value in pairs(Table) do
 		if typeof(value) == "table" then
@@ -40,7 +28,17 @@ local function clearTable(Table)
 		end
 		Table[index] = nil
 	end
-end --// IDK, table.clear() says it's supposed to be used for stuff that should be reused. IN this case it woudn't.
+	table.clear(Table) --\\ IGNORE THIS NOW.
+end --\\ Deep-clean? I don't know.
+
+local function deepCopy(t)
+	if typeof(t) ~= "table" then return t end
+	local copy = {}
+	for index, value in pairs(t) do
+		copy[index] = deepCopy(value)
+	end
+	return copy
+end
 
 local function getNotificationInfo(badgeId)
 	if not badges[badgeId] then return end
@@ -72,22 +70,22 @@ local function getNotificationInfo(badgeId)
 end
 
 
-function profileFunctions.AwardBadge(self, badgeId)
+function profileFunctions:AwardBadge(badgeId)
 	if badges[badgeId] then
 		if self.Data and (not (self.Data[badgeId])) then
 			self.Data[badgeId] = true
 			if not GlobalSettings.isNotificationsDisabled then
 				notificationRemote:FireClient(self.Player, getNotificationInfo(badgeId))
 			end
-			self.Connectors.onBadgeAwarded:Fire(badgeId)
+			self.onBadgeAwarded:Fire(badgeId)
 		end
 	else
 		error('[BadgeService3]:  No badge named: "'.. badgeId.. '" was found. Have you typed it correctly?')
 	end
-	self.Connectors.onUpdate:Fire(deepCopy(self.Data))
+	self.onUpdate:Fire(deepCopy(self.Data))
 end
 
-function profileFunctions.RemoveBadge(self, badgeId)
+function profileFunctions:RemoveBadge(badgeId)
 	if badges[badgeId] then
 		if self.Data[badgeId] then
 			self.Data[badgeId] = nil
@@ -95,10 +93,10 @@ function profileFunctions.RemoveBadge(self, badgeId)
 	else
 		error('[BadgeService3]:  No badge named: "'.. badgeId.. '" was found. Have you typed it correctly?')
 	end
-	self.Connectors.onUpdate:Fire(deepCopy(self.Data))
+	self.onUpdate:Fire(deepCopy(self.Data))
 end
 
-function profileFunctions.GetOwnedBadges(self)
+function profileFunctions:GetOwnedBadges()
 	local owned = {}
 	for badgeId, owns in pairs(self.Data) do
 		if owns == true then
@@ -108,7 +106,7 @@ function profileFunctions.GetOwnedBadges(self)
 	return owned
 end
 
-function profileFunctions.OwnsBadge(self, badgeId)
+function profileFunctions:OwnsBadge(badgeId)
 	if badges[badgeId] then
 		if self.Data[badgeId] then
 			return true
@@ -121,7 +119,7 @@ function profileFunctions.OwnsBadge(self, badgeId)
 end
 
 
-function profileFunctions.Optimize(self)
+function profileFunctions:Optimize()
 	for index, owns in pairs(self.Data) do
 		if typeof(owns) ~= "boolean" then
 			self.Data[index] = true
@@ -130,51 +128,35 @@ function profileFunctions.Optimize(self)
 			self.Data[index] = nil
 		end
 	end 
-	self.Connectors.onUpdate:Fire(deepCopy(self.Data))
+	self.onUpdate:Fire(deepCopy(self.Data))
 end
 
-function profileFunctions.onUpdate(self, givenFunction)
-	local connection = self.Connectors.onUpdate:Connect(givenFunction)
-	table.insert(self._connections, connection)
-	return connection
-end
-
-function profileFunctions.onBadgeAwarded(self, givenFunction)
-	local connection = self.Connectors.onBadgeAwarded:Connect(givenFunction)
-	table.insert(self._connections, connection)
-	return connection
-end
-
-function profileFunctions.Delete(self)
+function profileFunctions:Destroy()
 	if profiles[self.Player] then
-		for _, connection in pairs(self._connections) do
-			connection:Disconnect()
-		end
-		for _, connector in pairs(self.Connectors) do
-			connector:Destroy()
-		end
+		self.onUpdate:Destroy()
+		self.onBadgeAwarded:Destroy()
 		clearTable(self)
 		if profiles[self.Player] ~= nil then
 			profiles[self.Player] = nil
 		end
-		self = nil; --// idek if this does anything but whatever GARBAGE COLLECT IT 100% OK? now shut up.
 	end
+end
+
+function profileFunctions:Delete()
+	return self:Destroy()
 end
 
 local module = {}
 
-function module:LoadProfile(plr: Instance, profileData: table)
+function module:LoadProfile(plr: Player, profileData: table)
 	if profiles[plr] then return profiles[plr] end
 	assert(plr:IsA("Player"), "[BadgeService3]: You need to give a player object!")
 
 	local profile = {
 		Data = profileData;
 		Player = plr;
-		_connections = {};
-		Connectors = {
-			onUpdate = Signal.new();
-			onBadgeAwarded = Signal.new();
-		};
+		onUpdate = Signal.new();
+		onBadgeAwarded = Signal.new();
 	}
 	setmetatable(profile, {
 		__index = function(_, index)
@@ -185,16 +167,15 @@ function module:LoadProfile(plr: Instance, profileData: table)
 	return profile
 end
 
-function module:WaitForProfile(plr: Instance)
+function module:WaitForProfile(plr: Player)
 	if profiles[plr] then return profiles[plr] end
 	repeat
-		game:GetService("RunService").Heartbeat:Wait()
-	until profiles[plr] or plr.Parent == nil or (not (plr:IsDescendantOf(game.Players)))
+		runService.Heartbeat:Wait()
+	until profiles[plr] or plr.Parent == nil or not plr:IsDescendantOf(game.Players)
 	return profiles[plr]
 end
 
-function module:FindFirstProfile(plr: Instance)
-	assert(plr:IsA("Player"), "You need to give a player object!")
+function module:FindFirstProfile(plr: Player)
 	return profiles[plr]
 end
 
@@ -204,13 +185,13 @@ end
 
 function module:GetBadgeAmount()
 	local quantity = 0
-	for _, badge in pairs(badges) do
+	for _ in pairs(badges) do
 		quantity += 1
 	end
 	return quantity
 end
 
-function module:SetGlobalSettings(input: table)
+function module:SetGlobalSettings(input)
 	for settingId, newValue in pairs(input) do
 		if GlobalSettings[settingId] ~= nil then
 			if typeof(GlobalSettings[settingId]) == typeof(newValue) then
@@ -221,31 +202,22 @@ function module:SetGlobalSettings(input: table)
 end
 
 local function onPlayerRemoved(plr)
-	coroutine.wrap(function()
-		wait(GlobalSettings.autoGarbageCollectProfileTime)
-		local badgeProfile = module:FindFirstProfile(plr)
-		if badgeProfile then
-			badgeProfile:Delete()
-		end
-	end)()
+	wait(GlobalSettings.autoGarbageCollectProfileTime)
+	local badgeProfile = module:FindFirstProfile(plr)
+	if badgeProfile then
+		badgeProfile:Delete()
+	end
 end
 
 game.Players.PlayerRemoving:Connect(onPlayerRemoved)
 
-if false then
-	return module
-elseif runService:IsRunning() then
-	--// prevents glitches from happening while on the console, or
-	--   if the script editor gets mad because of this.
-	--   this works just fine in-game, and you shoudn't worry about this.
-
-	game:BindToClose(function()
-		if not runService:IsStudio() then
-			for _, plr in ipairs(game.Players:GetPlayers()) do
-				onPlayerRemoved(plr)
-			end
+game:BindToClose(function()
+	if not runService:IsStudio() then
+		for _, plr in ipairs(game.Players:GetPlayers()) do
+			coroutine.wrap(onPlayerRemoved)(plr)
 		end
-	end)
-end
+	end
+end)
+
 
 return module
