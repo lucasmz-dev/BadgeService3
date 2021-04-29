@@ -1,121 +1,65 @@
-local runService = game:GetService("RunService")
-
-local c_yield = coroutine.yield
-local c_running = coroutine.running
-local c_resume = coroutine.resume
-local c_create = coroutine.create
-local os_clock = os.clock
-local table_find = table.find
-local array_remove = function(Table, idx)
-    local count = #Table
-    
-    Table[idx] = Table[count]
-    Table[count] = nil
-end
-
---\\ Yes, I micro-optimized it... Whatever.
+local HttpService = game:GetService('HttpService');
 
 local Signal = {};
 Signal.__index = Signal;
+Signal.ClassName = 'Signal';
 
-local function runNoYield(func, ...)
-    local yields = true;
-    local args = ...
-    local thread = c_create(function()
-        func(args)
-        yields = false;
-    end)
-    c_resume(thread)
-
-    if yields then
-        error("Function yielded!")
-    end
-
-    return yields
+function Signal.__call(self, _, ...)
+	return self:Connect(...);
 end
-
-local emptyFunc, killSignal_metatable
-emptyFunc, killSignal_metatable = function() end, {__index = function() return emptyFunc end; __metatable = "locked!";}
---\\ Used for fooling signals that :Destroy() was used on, so I don't have to have a check for it.
---\\ Pretty ew line right? Lol.
-
 
 function Signal.new()
-    return setmetatable({
-        Active = true;
-        _lastFired = os_clock();
-        _functions = {};
-    }, Signal)
-end
-
-function Signal:GetLastFired()
-    return self._lastFired
+	local self = setmetatable({
+		_bindableEvent = Instance.new('BindableEvent');
+		Active = true;
+	}, Signal);
+	self._event = self._bindableEvent.Event;
+	return self;
 end
 
 function Signal:Connect(func)
-    local conn = setmetatable({
-        Connected = true;
-        _func = func;
-        _signal = self;
-    }, Signal)
+	if not self.Active then return end;
 
-    table.insert(self._functions, conn)
-    return conn
+	return self._event:Connect(function(fireId)
+		func(table.unpack(self[fireId]));
+	end)
 end
 
-function Signal:Disconnect()
-    if not self.Connected then return end
+function Signal:ConnectParallel(func)
+	if not self.Active then return end;
 
-    local _signal = self._signal
-    local _functions = _signal._functions
-
-    local connIndex = table_find(_functions, self)
-    if not connIndex then return end
-
-    array_remove(_functions, connIndex)
-    self.Connected = false
-    self._signal = nil
+	return self._event:ConnectParallel(function(fireId)
+		func(table.unpack(self[fireId]));
+	end)
 end
 
 function Signal:Fire(...)
-    local _functions = self._functions
+	if not self.Active then return end;
 
-    for i = 1, #_functions do
-        c_resume(c_create(_functions[i]._func), ...)
-        --\\ No, I can't use coroutine.wrap;
-    end
-end
+	local fireId = os.clock();
+	if self[fireId] then return self:Fire(...) end;
 
-function Signal:FireNoYield(...)
-    local _functions = self._functions
-
-    for i = 1, #_functions do
-        runNoYield(_functions[i]._func, ...)
-    end
+	self[fireId] = table.pack(...);
+	self._bindableEvent:Fire(fireId);
+	self[fireId] = nil;
 end
 
 function Signal:Wait()
-    local thread = c_running()
-    
-    local conn;
-    conn = self:Connect(function(...)
-        conn:Disconnect()
-        c_resume(thread, ...)
-    end)
-    
-    return c_yield()
+	if not self.Active then return end;
+
+	local fireId = self._event:Wait();
+	if not fireId then return end;
+
+	return table.unpack(self[fireId]);
 end
 
 function Signal:Destroy()
-    local _functions = self._functions
-    local count = #_functions
+	if not self.Active then return end;
 
-    self.Active = false
-    for i = 1, count do
-        _functions[i]:Disconnect()
-    end
-    setmetatable(self, killSignal_metatable)
-    table.clear(_functions) --idk don't ask me;
+	self.Active = false;
+	self._event = nil;
+	self._bindableEvent:Destroy();
+	self._bindableEvent = nil;
 end
 
-return Signal
+return Signal;
