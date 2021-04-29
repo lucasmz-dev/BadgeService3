@@ -21,16 +21,6 @@ local GlobalSettings = {
 	["NotificationTitle"] = "Badge Awarded!"
 }
 
-local function clearTable(Table)
-	for index, value in pairs(Table) do
-		if typeof(value) == "table" then
-			clearTable(value)
-		end
-		Table[index] = nil
-	end
-	table.clear(Table) --\\ IGNORE THIS NOW.
-end --\\ Deep-clean? I don't know.
-
 local function deepCopy(t)
 	if typeof(t) ~= "table" then return t end
 	local copy = {}
@@ -135,10 +125,8 @@ function profileFunctions:Destroy()
 	if profiles[self.Player] then
 		self.onUpdate:Destroy()
 		self.onBadgeAwarded:Destroy()
-		clearTable(self)
-		if profiles[self.Player] ~= nil then
-			profiles[self.Player] = nil
-		end
+		
+		profiles[self.Player] = nil;
 	end
 end
 
