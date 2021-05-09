@@ -1,4 +1,6 @@
 # BadgeService3
+![image](https://img.shields.io/github/downloads/LucasMZReal/BadgeService3/total)
+
 BadgeService3 allows you to have free badges using your own data saving mechanism!
 
 ## Why use BadgeService3?
