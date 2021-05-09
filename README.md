@@ -1,5 +1,11 @@
 # BadgeService3
-![image](https://img.shields.io/github/v/release/LucasMZReal/BadgeService3) ![image](https://img.shields.io/github/downloads/LucasMZReal/BadgeService3/total)
+
+<a href="https://github.com/LucasMZReal/BadgeService3/releases">
+    <img alt="Releases" src="https://img.shields.io/github/v/release/LucasMZReal/BadgeService3">
+</a> <a href="https://github.com/LucasMZReal/BadgeService3">
+    <img alt="" src="https://img.shields.io/github/downloads/LucasMZReal/BadgeService3/total">
+</a>
+
 
 BadgeService3 allows you to have free badges using your own data saving mechanism!
 
