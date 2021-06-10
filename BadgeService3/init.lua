@@ -152,6 +152,10 @@ local function ShallowCopy(t)
 	return copy;
 end
 
+local function IsTableEmpty(t)
+	return next(t) == nil
+end
+
 local function GetNotificationData(badgeId)
 	local badgeInfo = Badges[badgeId];
 
@@ -273,7 +277,7 @@ function BadgeProfile:AwardBadge(badgeId)
 
 	if self._player.Parent ~= Players then return end;
 
-	if self.Data[1] == nil then
+	if (self.Data[1] == nil) and not IsTableEmpty(self.Data) then
 		--\\ Is not an array! Need for conversion.
 
 		local converted = ConvertTrueDictionaryToArray(self.Data)
@@ -332,7 +336,7 @@ function BadgeProfile:OwnsBadge(badgeId)
 		("%s is not a valid BadgeID, are you sure you typed it correctly?"):format(badgeId)
 	)
 
-	if not self.Data[1] then
+	if (self.Data[1] == nil) and not IsTableEmpty(self.Data) then
 		--\\ Is not an array! Need for conversion.
 
 		local converted = ConvertTrueDictionaryToArray(self.Data)
