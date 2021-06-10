@@ -131,19 +131,6 @@ Remote_Notification.Name = "Notification"
 
 --\\ Private functions;
 
-local function ConvertTrueDictionaryToArray(t)
-	--\\ Transforms {[badgeId] = true} to {badgeId1, badgeId2}
-
-	local converted = {};
-	for badgeId, isOwned in pairs(t) do
-		if isOwned then
-			table.insert(converted, badgeId)
-		end
-	end
-
-	return converted;
-end
-
 local function ShallowCopy(t)
 	local copy = table.create(#t)
 	for index, value in pairs(t) do
@@ -155,6 +142,29 @@ end
 local function IsTableEmpty(t)
 	return next(t) == nil
 end
+
+local function ConvertTrueDictionaryToArray(self)
+	--\\ Transforms {[badgeId] = true} to {badgeId1, badgeId2}
+
+	if self.Data[1] or IsTableEmpty(self.Data) then
+		return;
+	end
+
+	--
+	local converted = {};
+	for badgeId, isOwned in pairs(self.Data) do
+		if isOwned then
+			table.insert(converted, badgeId)
+		end
+	end
+
+	
+	self.Data = converted;
+	self.OnUpdate:Fire(
+		ShallowCopy(self.Data)
+	);	
+end
+
 
 local function GetNotificationData(badgeId)
 	local badgeInfo = Badges[badgeId];
@@ -277,15 +287,7 @@ function BadgeProfile:AwardBadge(badgeId)
 
 	if self._player.Parent ~= Players then return end;
 
-	if (self.Data[1] == nil) and not IsTableEmpty(self.Data) then
-		--\\ Is not an array! Need for conversion.
-
-		local converted = ConvertTrueDictionaryToArray(self.Data)
-		self.Data = converted;
-		self.OnUpdate:Fire(
-			ShallowCopy(self.Data)
-		);
-	end
+	ConvertTrueDictionaryToArray(self);
 
 	if not table.find(self.Data, badgeId) then
 		table.insert(
@@ -307,15 +309,7 @@ function BadgeProfile:RemoveBadge(badgeId)
 
 	if self._player.Parent ~= Players then return end;
 
-	if not self.Data[1] then
-		--\\ Is not an array! Need for conversion.
-
-		local converted = ConvertTrueDictionaryToArray(self.Data)
-		self.Data = converted;
-		self.OnUpdate:Fire(
-			ShallowCopy(self.Data)
-		);
-	end
+	ConvertTrueDictionaryToArray(self);
 
 	local badgeIndex = table.find(self.Data, badgeId)
 	if badgeIndex then
@@ -336,15 +330,7 @@ function BadgeProfile:OwnsBadge(badgeId)
 		("%s is not a valid BadgeID, are you sure you typed it correctly?"):format(badgeId)
 	)
 
-	if (self.Data[1] == nil) and not IsTableEmpty(self.Data) then
-		--\\ Is not an array! Need for conversion.
-
-		local converted = ConvertTrueDictionaryToArray(self.Data)
-		self.Data = converted;
-		self.OnUpdate:Fire(
-			ShallowCopy(self.Data)
-		);
-	end
+	ConvertTrueDictionaryToArray(self);
 
 	if table.find(self.Data, badgeId) then
 		return true;
@@ -354,6 +340,8 @@ function BadgeProfile:OwnsBadge(badgeId)
 end
 
 function BadgeProfile:GetOwnedBadges()
+	ConvertTrueDictionaryToArray(self);
+	
 	return ShallowCopy(self.Data);
 end
 
