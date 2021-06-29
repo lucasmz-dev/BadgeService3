@@ -156,16 +156,18 @@ function Signal:Fire(...)
 		warn(
 			("Cannot fire destroyed signal! %s"):format(self.Name)
 		)
-		return
-	end;
-
-	local fire_id;
-	if ... ~= nil then
-		fire_id = #self + 1;
-		self[fire_id] = table.pack(...);
+		return;
 	end
 
-	self._bindable:Fire(fire_id);
+	local fire_id;
+	local args = table.pack(...)
+
+	if args.n ~= 0 then
+		fire_id = #self + 1
+		self[fire_id] = args
+	end
+
+	self._bindable:Fire(fire_id)
 end
 
 function Signal:Connect(handle)
