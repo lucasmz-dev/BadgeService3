@@ -74,6 +74,13 @@
 			Returns: boolean
 			\\ Returns a boolean telling if a player owns a badge.
 
+
+			:GetOwnedBadges
+
+			Parameters: nil
+			Returns: table (array)
+			\\ Returns a copy of .Data, which is safe to read, modify, and check.
+
 		Events:
 
 			.OnUpdate
@@ -108,25 +115,26 @@ local SETTINGS = {
 	NotificationTitle = "Badge Awarded!"
 }
 
-local Players = game:GetService("Players");
-local ReplicatedStorage = game:GetService("ReplicatedStorage");
-local RunService = game:GetService("RunService");
-local Signal = require(script:WaitForChild("Signal"));
-local Badges = require(script:WaitForChild("Badges"));
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Signal = require(script:WaitForChild("Signal"))
+local Badges = require(script:WaitForChild("Badges"))
 
-local BADGE_PROFILES = {};
-local ON_BADGE_PROFILE_LOADED = Signal.new();
+local BADGE_COUNT
+local BADGE_PROFILES = {}
+local ON_BADGE_PROFILE_LOADED = Signal.new()
 
-local BadgeService3 = {};
+local BadgeService3 = {}
 
-local BadgeProfile = {};
-BadgeProfile.__index = BadgeProfile;
+local BadgeProfile = {}
+BadgeProfile.__index = BadgeProfile
 
 --\\ Init:
 
 local Remote_Notification = script:FindFirstChild("Notification") or Instance.new("RemoteEvent")
-Remote_Notification.Parent = script;
 Remote_Notification.Name = "Notification"
+Remote_Notification.Parent = script
 
 
 --\\ Private functions;
@@ -134,9 +142,9 @@ Remote_Notification.Name = "Notification"
 local function ShallowCopy(t)
 	local copy = table.create(#t)
 	for index, value in pairs(t) do
-		copy[index] = value;
+		copy[index] = value
 	end
-	return copy;
+	return copy
 end
 
 local function IsTableEmpty(t)
@@ -151,7 +159,7 @@ local function ConvertTrueDictionaryToArray(self)
 	end
 
 	--
-	local converted = {};
+	local converted = {}
 	for badgeId, isOwned in pairs(self.Data) do
 		if isOwned then
 			table.insert(converted, badgeId)
@@ -159,15 +167,15 @@ local function ConvertTrueDictionaryToArray(self)
 	end
 
 	
-	self.Data = converted;
+	self.Data = converted
 	self.OnUpdate:Fire(
 		ShallowCopy(self.Data)
-	);	
+	);
 end
 
 
 local function GetNotificationData(badgeId)
-	local badgeInfo = Badges[badgeId];
+	local badgeInfo = Badges[badgeId]
 
 	local imageURL = SETTINGS.usesBadgeImageForNotifications and ( tonumber(badgeInfo.Image) and 'rbxassetid://'.. badgeInfo.Image )
 					 or (SETTINGS.usesGoldBadgeNotification and 'rbxassetid://206410289' or SETTINGS.defaultBadgeNotificationImage)
@@ -196,10 +204,10 @@ function BadgeService3:LoadProfile(player, badgeData)
 	if BADGE_PROFILES[player] then return BADGE_PROFILES[player] end;
 
 	if (typeof(badgeData) == 'table') or (badgeData == nil) then
-		badgeData = badgeData or {};
+		badgeData = badgeData or {}
 	else
 		warn("BadgeService3: :LoadProfile was called with invalid data, it instead resulted in no data.")
-		badgeData = {};
+		badgeData = {}
 	end
 
 	local badgeProfile = setmetatable({
@@ -209,23 +217,22 @@ function BadgeService3:LoadProfile(player, badgeData)
 		_player = player;
 	}, BadgeProfile)
 
-	badgeProfile.onUpdate = badgeProfile.OnUpdate;
-	badgeProfile.onBadgeAwarded = badgeProfile.OnBadgeAwarded;
+	badgeProfile.onUpdate = badgeProfile.OnUpdate
+	badgeProfile.onBadgeAwarded = badgeProfile.OnBadgeAwarded
 
-	BADGE_PROFILES[player] = badgeProfile;
-	ON_BADGE_PROFILE_LOADED:Fire(badgeProfile);
+	BADGE_PROFILES[player] = badgeProfile
+	ON_BADGE_PROFILE_LOADED:Fire()
 
-	badgeProfile
-		:OnBadgeAwarded(function(badgeId)
-			if SETTINGS.isNotificationsDisabled then return end;
-			
-			Remote_Notification:FireClient(
-				player,
-				GetNotificationData(badgeId)
-			)
-		end)
+	badgeProfile:OnBadgeAwarded(function(badgeId)
+		if SETTINGS.isNotificationsDisabled then return end;
 
-	return badgeProfile;
+		Remote_Notification:FireClient(
+			player,
+			GetNotificationData(badgeId)
+		)
+	end)
+
+	return badgeProfile
 end
 
 function BadgeService3:FindFirstProfile(player)
@@ -233,7 +240,7 @@ function BadgeService3:FindFirstProfile(player)
 		typeof(player) == "Instance" and player:IsA("Player"),
 		"Invalid :FindFirstProfile parameter."
 	)
-	if player.Parent ~= Players then return end
+	if player.Parent ~= Players then return end;
 
 	return BADGE_PROFILES[player]
 end
@@ -248,9 +255,9 @@ function BadgeService3:WaitForProfile(player)
 	if BADGE_PROFILES[player] then return BADGE_PROFILES[player] end;
 
 	while true do
-		local badgeProfile = ON_BADGE_PROFILE_LOADED:Wait();
-		if badgeProfile._player == player then
-			return badgeProfile;
+		local badgeProfile = ON_BADGE_PROFILE_LOADED:Wait() and BADGE_PROFILES[player]
+		if badgeProfile and badgeProfile._player == player then
+			return badgeProfile
 		end
 		
 		if player.Parent ~= Players then return end;
@@ -258,21 +265,26 @@ function BadgeService3:WaitForProfile(player)
 end
 
 function BadgeService3:GetBadgeCount()
-	local badgeAmount = 0;
-	for _ in pairs(Badges) do
-		badgeAmount += 1;
+	if BADGE_COUNT then
+		return BADGE_COUNT
 	end
-	return badgeAmount;
+
+
+	BADGE_COUNT = 0
+	for _ in pairs(Badges) do
+		BADGE_COUNT += 1
+	end
+	return BADGE_COUNT
 end
 
 function BadgeService3:GetBadges()
-	return Badges, self:GetBadgeCount()
+	return Badges, BADGE_COUNT or self:GetBadgeCount()
 end
 
 function BadgeService3:SetGlobalSettings(changedSettings)
 	for index, value in pairs(changedSettings) do
 		if typeof(value) == typeof(SETTINGS[index]) then
-			SETTINGS[index] = value;
+			SETTINGS[index] = value
 		end
 	end
 end
@@ -287,17 +299,19 @@ function BadgeProfile:AwardBadge(badgeId)
 
 	if self._player.Parent ~= Players then return end;
 
-	ConvertTrueDictionaryToArray(self);
+	ConvertTrueDictionaryToArray(self)
 
 	if not table.find(self.Data, badgeId) then
 		table.insert(
 			self.Data,
 			badgeId
 		)
+
 		self.OnUpdate:Fire(
 			ShallowCopy(self.Data)
-		);
-		self.OnBadgeAwarded:Fire(badgeId);
+		)
+
+		self.OnBadgeAwarded:Fire(badgeId)
 	end
 end
 
@@ -309,7 +323,7 @@ function BadgeProfile:RemoveBadge(badgeId)
 
 	if self._player.Parent ~= Players then return end;
 
-	ConvertTrueDictionaryToArray(self);
+	ConvertTrueDictionaryToArray(self)
 
 	local badgeIndex = table.find(self.Data, badgeId)
 	if badgeIndex then
@@ -330,23 +344,19 @@ function BadgeProfile:OwnsBadge(badgeId)
 		("%s is not a valid BadgeID, are you sure you typed it correctly?"):format(badgeId)
 	)
 
-	ConvertTrueDictionaryToArray(self);
+	ConvertTrueDictionaryToArray(self)
 
-	if table.find(self.Data, badgeId) then
-		return true;
-	else
-		return false;
-	end
+	return table.find(self.Data) and true
 end
 
 function BadgeProfile:GetOwnedBadges()
-	ConvertTrueDictionaryToArray(self);
+	ConvertTrueDictionaryToArray(self)
 	
-	return ShallowCopy(self.Data);
+	return ShallowCopy(self.Data)
 end
 
 function BadgeProfile:Destroy()
-	BADGE_PROFILES[self._player] = nil;
+	BADGE_PROFILES[self._player] = nil
 	self.OnUpdate:Destroy()
 	self.OnBadgeAwarded:Destroy()
 end
@@ -366,4 +376,4 @@ Players.PlayerRemoving:Connect(function(player)
 	badgeProfile:Destroy()
 end)
 
-return BadgeService3;
+return BadgeService3
