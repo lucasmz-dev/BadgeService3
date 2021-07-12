@@ -1,0 +1,19 @@
+name: Deploy Docs
+on: [push]
+
+jobs:
+  deploy-docs:
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, '[docs]')
+    timeout-minutes: 8
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - name: Deploy to GitHub Pages
+        uses: mhausenblas/mkdocs-deploy-gh-pages@1.16
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CONFIG_FILE: mkdocs.yml
