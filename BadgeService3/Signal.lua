@@ -1,288 +1,248 @@
 --[[
+	Library:
+
+		Functions:
+
+			.new()
+				Returns: Signal
+				
+				Description:
+					\\ Creates a new Signal object.
 
 	Signal:
-	
+
 		Functions:
-	
-			Signal.new()
-				Returns: ScriptSignal
-				Parameters: Signal Name: string (optional)
-				
-				Description:
-					\\ Creates a new ScriptSignal object.
-					\\ Signal Name is used for printing, it's not needed.
-		
-	ScriptSignal:
-	
-		Properties:
-		
-			Signal.ClassName (read-only)
-				\\ Always "Signal".
-				
-			Signal.Name
-				\\ The name you give it, if you do, on Signal.new
-				
-		Functions:
-		
-			ScriptSignal:IsActive()
-			
+
+			:IsActive()
 				Returns: boolean
-				Parameters: nil
-				
 				Description:
-					\\ Returns whether a ScriptSignal is active or not. 
-		
-			ScriptSignal:Fire(...)
-			
-				Returns: nil
+					\\ Returns whether a ScriptSignal is active or not.
+
+			:Fire(...)
 				Parameters: any
-				
 				Description:
 					\\ Fires a ScriptSignal with any arguments.
-				
-			ScriptSignal:Connect()
-			
-				Returns: RBXScriptConnection
+
+			:Connect()
+				Returns: Connection
 				Parameters: function
-				
 				Description:
 					\\ Connects a function to a ScriptSignal.
-					
-			ScriptSignal:ConnectParallel()
-			
-				Returns: RBXScriptConnection
-				Parameters: function
-				
-				Description:
-					\\ Connects a function to a ScriptSignal. (multi-threading)
-					
-			ScriptSignal:Wait()
-			
+
+			:Wait()
 				Returns: any
-				Parameters: nil
-				
 				Description:
 					\\ Yields until the Signal it belongs to is fired.
 					\\ Will return the arguments it was fired with.
-					
-			ScriptSignal:Destroy()
-			
-				Returns: nil
-				Parameters: nil
-				
+
+			:Destroy()
 				Description:
 					\\ Destroys a ScriptSignal, all connections are then disconnected.
-					
-		RBXScriptConnection:
-		
-			Parameters:
 			
-				RBXScriptConnection.Connected: boolean
-					--\\ If true:
-								RBXScriptConnection is connected.
-						 Else if false:
-						 		RBXScriptConnection is disconnected.
-				
-			Functions:
-			
-				RBXScriptConnection:Disconnect()
-				
-					Parameters: nil
-					Returns: nil
-					
-					Description:
-						\\ Disconnects a connection.
-						
-		---
-		
-		"Quirks":
-		
-			\\ If a Signal is inside a table, you can :Connect to it by calling it as a function.
-			\\ Example:
-			
-				local t = {}
-				t.Signal = Signal.new()
-				t:Signal(function()
-					print('Signal Fired!')
+			:DisconnectAll()
+				Description:
+					\\ Disconnects all connections without destroying the Signal.
+
+	Connection:
+
+		Properties:
+
+			Connection.Connected
+							
+		Functions:
+
+			Connection:Disconnect()
+				Description:
+					\\ Disconnects a connection.
+
+		Extra:
+
+			This Signal Class can be used to make shortcuts to connector functions.
+			Example:
+
+				local Event = Signal.new()
+				local Class = {}
+				Class.ListenToChanged = Event
+
+				Class.ListenToChanged:Connect(function()
+					print("Fired!")
+					-- Valid (obviously)
 				end)
-				
-			\\ This makes it easier for developers to simply have functions like 'ListenToChange' 
-			\\ which you won't need extra keys for it anymore.
+
+				Class:ListenToChanged(function()
+					print("Fired!")
+					-- ^ Valid, can be used for things like these
+				end)
+
+			Note that you shouldn't call a Signal unless it's being used in this form.
 			
-			--
-			
-			
-			Supports :Fire 'ing inside connections.
-			
-			Supports multi-threading with :ConnectParallel
-				 ^ Beta!
 ]]
 
-local HttpService = game:GetService("HttpService")
+local ERROR_ON_ALREADY_DISCONNECTED = false
 
 local Signal = {}
 Signal.__index = Signal
-Signal.ClassName = "Signal"
 
-
+local Connection = {}
+Connection.__index = Connection
 
 function Signal:__call(_, ...)
+	if not self:IsActive() then
+		return
+	end
+
 	return self:Connect(...)
 end
 
-function Signal:__tostring()
-	return "Signal ".. self.Name
-end
-
-local function GenerateUniqueID(self)
-	local _args = self._args
-
-	local id = HttpService:GenerateGUID()
-	while _args[id] do
-		id = HttpService:GenerateGUID()
-	end
-
-	return id
-end
-
-function Signal:IsA(...)
-	return self.ClassName == ...
-end
-
-function Signal.new(name)
+function Signal.new()
 	local self = setmetatable({
-		Name = typeof(name) == 'string' and name or "",
-		_bindable = Instance.new("BindableEvent"),
-		_args = {}
+		_active = true,
+		_head = nil
 	}, Signal)
-
-	--\\ Thanks Quenty for the info,
-	--   Events are fired from the most recently connected, to the
-	--   last connected one. Meaning we can finally do clean up of arguments!
-	
-	self._bindable.Event:Connect(function(fire_id)
-		if not fire_id then
-			return
-		end
-
-		self._args[fire_id] = nil
-
-		if (not self._bindable) and (not next(self._args)) then
-			self._args = nil
-		end
-	end)
 
 	return self
 end
 
-function Signal:Fire(...)
-	if not self._bindable then
-		warn("You cannot :Fire a destroyed Signal. ".. self.Name)
-		return
-	end
-
-	local args = table.pack(...)
-	local fire_id
-	if args.n ~= 0 then
-		fire_id = GenerateUniqueID(self)
-		self._args[fire_id] = args
-	end
-
-	self._bindable:Fire(fire_id)
+function Signal:IsActive()
+	return self._active == true
 end
 
-
 function Signal:Connect(func)
-	if not self._bindable then
-		warn("You cannot connect to a destroyed Signal. ".. self.Name)
-		return;
-	end
-
 	assert(
 		typeof(func) == 'function',
-		":Connect can only connect a function. ".. self.Name
+		":Connect must be called with a function"
 	)
 
+	if not self:IsActive() then
+		return setmetatable({
+			Connected = false
+		}, Connection)
+	end
 
-	self._bindable.Event:Connect(function(fire_id)
-		if fire_id then
-			local args = self._args[fire_id]
+	local connection = setmetatable({
+		Connected = true,
+		_func = func,
+		_signal = self,
+		_next = nil,
+		_prev = nil
+	}, Connection)
 
-			if args then
-				func(
-					table.unpack(args, 1, args.n)
-				)
-				return
-			end
+	local _head = self._head
+	if _head ~= nil then
+		_head._prev = connection
+		connection._next = _head
+	end
 
-			error("Arguments missing.")
-		end
+	self._head = connection
 
-		func()
-	end)
+	return connection
 end
 
 function Signal:ConnectParallel(func)
-	if not self._bindable then
-		warn("You cannot connect to a destroyed Signal. ".. self.Name)
-		return;
-	end
-
 	assert(
 		typeof(func) == 'function',
-		":ConnectParallel can only connect a function. ".. self.Name
+		":ConnectParallel must be called with a function"
 	)
 
-
-	self._bindable.Event:ConnectParallel(function(fire_id)
-		if fire_id then
-			local args = self._args[fire_id]
-
-			if args then
-				func(
-					table.unpack(args, 1, args.n)
-				)
-				return
-			end
-
-			error("Arguments missing.")
-		end
-
-		func()
+	return self:Connect(function(...)
+		task.desynchronize()
+		func(...)
 	end)
 end
 
-function Signal:Wait()
-	if not self._bindable then
-		warn("You cannot :Wait to an destroyed Signal. ".. self.Name)
+function Connection:Disconnect()
+	if not self.Connected then
+		if ERROR_ON_ALREADY_DISCONNECTED then
+			error("Can't disconnect twice", 2)
+		end
+
 		return
 	end
 
-	local fire_id = self._bindable.Event:Wait()
+	self.Connected = false
 
-	if fire_id then
-		local args = self._args[fire_id]
+	local _next = self._next
+	local _prev = self._prev
 
-		if args then
-			return table.unpack(args, 1, args.n)
-		end
+	if _next ~= nil then
+		_next._prev = _prev
+	end
 
-		error("Arguments missing.")
+	if _prev ~= nil then
+		_prev._next = _next
+	else
+		--\\ This connection was the _head,
+		--   therefore we need to update the head
+		--   to the connection after this one.
+
+		self._signal._head = _next
+	end
+	
+	--\\ Safe to wipe references to:
+
+	self._signal = nil
+	self._prev = nil
+end
+
+function Signal:Wait()
+	if not self:IsActive() then
+		warn("Tried to :Wait on destroyed signal")
+		return
+	end
+	
+	local thread = coroutine.running()
+
+	local connection
+	connection = self:Connect(function(...)
+		connection:Disconnect()
+
+		task.spawn(
+			thread,
+			...
+		)
+	end)
+
+	return coroutine.yield()
+end
+
+function Signal:Fire(...)
+	if not self:IsActive() then
+		warn("Tried to :Fire destroyed signal")
+		return
+	end
+
+	local connection = self._head
+	while connection ~= nil do
+		task.defer(
+			connection._func,
+			...
+		)
+
+		connection = connection._next
 	end
 end
 
+function Signal:DisconnectAll()
+	local connection = self._head
+	while connection ~= nil do
+		--connection:Disconnect()
+
+		connection.Connected = false
+		connection._prev = nil
+		connection._signal = nil
+
+		connection = connection._next
+	end
+	self._head = nil
+end
+
 function Signal:Destroy()
-	if not self._bindable then
-		warn("You cannot destroy an already destroyed Signal. ".. self.Name)
-		return;
+	if not self:IsActive() then
+		return
 	end
 
-	self._bindable:Destroy()
-	self._bindable = nil
-
-	if not next(self._args) then
-		self._args = nil
-	end
+	self._active = false
+	self:DisconnectAll()
 end
 
 return Signal
