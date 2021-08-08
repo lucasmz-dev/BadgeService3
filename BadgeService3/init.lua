@@ -269,7 +269,6 @@ function BadgeService3:GetBadgeCount()
 		return BADGE_COUNT
 	end
 
-
 	BADGE_COUNT = 0
 	for _ in pairs(Badges) do
 		BADGE_COUNT += 1
