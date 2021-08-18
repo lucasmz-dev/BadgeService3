@@ -115,7 +115,6 @@ local Settings = {
 	NotificationTitle =                 "Badge Awarded!"
 }
 
-local WaitForChild = game.WaitForChild
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Signal = require(script.Signal)
