@@ -43,15 +43,25 @@
 				Description:
 					\\ Disconnects all connections without destroying the Signal.
 
+			:SetName()
+				Parameters: string
+				Description:
+					\\ Sets the name of a Signal
+
+			:GetName()
+				Returns: string
+				Description:
+					\\ Returns the Signal's current name
+
 	Connection:
 
 		Properties:
 
-			Connection.Connected
+			.Connected
 							
 		Functions:
 
-			Connection:Disconnect()
+			:Disconnect()
 				Description:
 					\\ Disconnects a connection.
 
@@ -78,7 +88,14 @@
 			
 ]]
 
+local t_insert = table.insert
+local c_running = coroutine.running
+local c_yield = coroutine.yield
+local t_defer = task.defer
+local t_desynchronize = task.desynchronize
+
 local ERROR_ON_ALREADY_DISCONNECTED = false
+local TOSTRING_ENABLED = true
 
 local Signal = {}
 Signal.__index = Signal
@@ -86,18 +103,31 @@ Signal.__index = Signal
 local Connection = {}
 Connection.__index = Connection
 
-function Signal:__call(_, ...)
-	if not self:IsActive() then
+local function CleanDisconnections(self)
+	--\\ Fired whenever all connections from a signal are fired,
+	--   handles empty-ing connections.
+
+	local _disconnections = self._disconnections
+	if _disconnections == nil then
 		return
 	end
+	self._disconnections = nil
+	self._firing -= 1
 
-	return self:Connect(...)
+	for _, connection in ipairs(_disconnections) do
+		connection._next = nil
+		connection._func = nil
+	end
 end
 
-function Signal.new()
+
+function Signal.new(name)
 	local self = setmetatable({
+		_name = typeof(name) == 'string' and name or "",
 		_active = true,
-		_head = nil
+		_head = nil,
+		_firing = 0,
+		_disconnections = nil
 	}, Signal)
 
 	return self
@@ -107,27 +137,24 @@ function Signal:IsActive()
 	return self._active == true
 end
 
-function Signal:Connect(func)
-	assert(
-		typeof(func) == 'function',
-		":Connect must be called with a function"
-	)
-
+local function Connect(self, func, is_wait)
 	if not self:IsActive() then
 		return setmetatable({
 			Connected = false
 		}, Connection)
 	end
 
+	local _head = self._head
+
 	local connection = setmetatable({
 		Connected = true,
 		_func = func,
 		_signal = self,
-		_next = nil,
-		_prev = nil
+		_next = _head,
+		_prev = nil,
+		_is_wait = is_wait
 	}, Connection)
 
-	local _head = self._head
 	if _head ~= nil then
 		_head._prev = connection
 		connection._next = _head
@@ -138,14 +165,23 @@ function Signal:Connect(func)
 	return connection
 end
 
+function Signal:Connect(func)
+	assert(
+		typeof(func) == 'function',
+		":Connect must be called with a function ".. self._name
+	)
+
+	return Connect(self, func)
+end
+
 function Signal:ConnectParallel(func)
 	assert(
 		typeof(func) == 'function',
-		":ConnectParallel must be called with a function"
+		":ConnectParallel must be called with a function ".. self._name
 	)
 
-	return self:Connect(function(...)
-		task.desynchronize()
+	return Connect(self, function(...)
+		t_desynchronize()
 		func(...)
 	end)
 end
@@ -161,6 +197,7 @@ function Connection:Disconnect()
 
 	self.Connected = false
 
+	local _signal = self._signal
 	local _next = self._next
 	local _prev = self._prev
 
@@ -175,63 +212,72 @@ function Connection:Disconnect()
 		--   therefore we need to update the head
 		--   to the connection after this one.
 
-		self._signal._head = _next
+		_signal._head = _next
 	end
 	
-	--\\ Safe to wipe references to:
+	--\\ Safe to always wipe references to:
 
 	self._signal = nil
 	self._prev = nil
+
+	local _disconnections = _signal._disconnections
+	if _signal._firing ~= 0 then
+		if _disconnections == nil then
+			_disconnections = {}
+			_signal._disconnections = _disconnections
+		end
+		t_insert(_disconnections, self)
+		return
+		--\\ Schedule to be fully cleaned up later.
+
+	else
+		self._func = nil
+		self._next = nil
+	end
 end
 
 function Signal:Wait()
-	if not self:IsActive() then
-		warn("Tried to :Wait on destroyed signal")
-		return
-	end
-	
-	local thread = coroutine.running()
+	Connect(
+		self,
+		c_running(),
+		true
+	)
 
-	local connection
-	connection = self:Connect(function(...)
-		connection:Disconnect()
-
-		task.spawn(
-			thread,
-			...
-		)
-	end)
-
-	return coroutine.yield()
+	return c_yield()
 end
+
 
 function Signal:Fire(...)
 	if not self:IsActive() then
-		warn("Tried to :Fire destroyed signal")
+		warn("Tried to :Fire destroyed signal ".. self._name)
 		return
 	end
+	self._firing += 1
 
 	local connection = self._head
 	while connection ~= nil do
-		task.defer(
+		t_defer(
 			connection._func,
 			...
 		)
+		
+		if connection._is_wait then
+			connection:Disconnect()
+		end
 
 		connection = connection._next
 	end
+
+	t_defer(
+		CleanDisconnections,
+		self
+	)
 end
 
 function Signal:DisconnectAll()
 	local connection = self._head
 	while connection ~= nil do
-		--connection:Disconnect()
-
-		connection.Connected = false
-		connection._prev = nil
-		connection._signal = nil
-
-		connection = connection._next
+		connection:Disconnect()
 	end
 	self._head = nil
 end
@@ -243,6 +289,39 @@ function Signal:Destroy()
 
 	self._active = false
 	self:DisconnectAll()
+end
+
+function Signal:GetName()
+	return self._name
+end
+
+function Signal:SetName(name)
+	assert(
+		typeof(name) == 'string',
+		"Name must be a string!"
+	)
+
+	self._name = name
+end
+
+function Signal:__tostring()
+	return "Signal ".. self._name
+end
+if not TOSTRING_ENABLED then
+	Signal.__tostring = nil
+end
+
+function Signal:__call(_, func)
+	if not self:IsActive() then
+		return
+	end
+
+	assert(
+		typeof(func) == 'function',
+		":Connect must be called with a function ".. self._name
+	)
+
+	return Connect(self, func)
 end
 
 return Signal
