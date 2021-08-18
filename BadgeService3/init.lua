@@ -107,12 +107,12 @@
 
 local Settings = {
 	UsesBadgeImageForNotifications =	false,
-	IsNotificationsDisabled =			false,
-	UsesGoldBadgeNotification =			false,
-	DefaultBadgeNotificationImage = 	"rbxassetid://6170641771",
-	NotificationDuration =				5,
-	NotificationDescription =			'You have been awarded "%s"!',
-	NotificationTitle =					"Badge Awarded!"
+	IsNotificationsDisabled =           false,
+	UsesGoldBadgeNotification =         false,
+	DefaultBadgeNotificationImage =     "rbxassetid://6170641771",
+	NotificationDuration =              5,
+	NotificationDescription =           'You have been awarded "%s"!',
+	NotificationTitle =                 "Badge Awarded!"
 }
 
 local WaitForChild = game.WaitForChild
