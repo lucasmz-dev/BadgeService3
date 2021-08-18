@@ -106,7 +106,7 @@
 ]]
 
 local Settings = {
-	UsesBadgeImageForNotifications =	false,
+	UsesBadgeImageForNotifications =    false,
 	IsNotificationsDisabled =           false,
 	UsesGoldBadgeNotification =         false,
 	DefaultBadgeNotificationImage =     "rbxassetid://6170641771",
