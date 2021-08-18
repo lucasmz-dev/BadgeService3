@@ -15,9 +15,9 @@
 		↓ You can find the documentation here.
 
 		Functions:
-		
+
 			:LoadProfile
-			
+
 			Parameters: player, badgeData
 			Returns: BadgeProfile
 			\\ Loads a Badge Profile into the module.
@@ -87,39 +87,39 @@
 
 			Arguments: Copied-data used for updating your data when it needs to
 					   For DS2 / ProfileService where you need to update data as it changes.
-			
+
 			\\ Fires when BadgeProfile.Data changes via a function.
 				You shouldn't mutate .Data yourself, please don't.
 			  \ You also shouldn't try to get data directly from it,
 				all of that should be all handled by BadgeService3,
 				try to use as much using BadgeService3 as you can without checking .Data!
 
-			
+
 			.OnBadgeAwarded
 
 			Arguments: badgeId (from the badge that was awarded)
 
 			\\ Should be used for custom notification integration.
 
-		Version: 3.0.0 (09/06/2021)
-					    DD/MM/YYYY
+		Version: 3.2.0 (17/08/2021)
+						DD/MM/YYYY
 ]]
 
-local SETTINGS = {
-	usesBadgeImageForNotifications = false;
-	isNotificationsDisabled = false;
-	usesGoldBadgeNotification = false;
-	defaultBadgeNotificationImage = "rbxassetid://6170641771";
-	notificationDuration = 5;
-	NotificationDescription = 'You have been awarded "%s"!';
-	NotificationTitle = "Badge Awarded!"
+local Settings = {
+	UsesBadgeImageForNotifications = 	false,
+	IsNotificationsDisabled = 			false,
+	UsesGoldBadgeNotification = 		false,
+	DefaultBadgeNotificationImage = 	"rbxassetid://6170641771",
+	NotificationDuration = 				5,
+	NotificationDescription = 			'You have been awarded "%s"!',
+	NotificationTitle = 				"Badge Awarded!"
 }
 
+local WaitForChild = game.WaitForChild
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local Signal = require(script:WaitForChild("Signal"))
-local Badges = require(script:WaitForChild("Badges"))
+local Signal = require(script.Signal)
+local Badges = require(script.Badges)
 
 local BADGE_COUNT
 local BADGE_PROFILES = {}
@@ -136,8 +136,7 @@ local Remote_Notification = script:FindFirstChild("Notification") or Instance.ne
 Remote_Notification.Name = "Notification"
 Remote_Notification.Parent = script
 
-
---\\ Private functions;
+--\\ Private functions:
 
 local function ShallowCopy(t)
 	local copy = table.create(#t)
@@ -152,13 +151,12 @@ local function IsTableEmpty(t)
 end
 
 local function ConvertTrueDictionaryToArray(self)
-	--\\ Transforms {[badgeId] = true} to {badgeId1, badgeId2}
+	--\\ Updates BS3's legacy format into an array
 
 	if self.Data[1] or IsTableEmpty(self.Data) then
-		return;
+		return
 	end
 
-	--
 	local converted = {}
 	for badgeId, isOwned in pairs(self.Data) do
 		if isOwned then
@@ -166,30 +164,43 @@ local function ConvertTrueDictionaryToArray(self)
 		end
 	end
 
-	
-	self.Data = converted
+	table.clear(self.Data)
+	for _, badgeId in ipairs(converted) do
+		table.insert(self.Data, badgeId)
+	end
+
 	self.OnUpdate:Fire(
 		ShallowCopy(self.Data)
-	);
+	)
 end
 
 
 local function GetNotificationData(badgeId)
 	local badgeInfo = Badges[badgeId]
 
-	local imageURL = SETTINGS.usesBadgeImageForNotifications and ( tonumber(badgeInfo.Image) and 'rbxassetid://'.. badgeInfo.Image )
-					 or (SETTINGS.usesGoldBadgeNotification and 'rbxassetid://206410289' or SETTINGS.defaultBadgeNotificationImage)
-	--\\ I might be a little bit too much, um obsessed with this..
+	local imageURL
+
+	local badgeImageUrl = Settings.UsesBadgeImageForNotifications and badgeInfo.Image
+	if badgeImageUrl then
+		if typeof(badgeImageUrl) == 'number' then
+			imageURL = 'rbxassetid://'.. badgeImageUrl
+		else
+			imageURL = badgeImageUrl
+		end
+	else
+		imageURL =	Settings.UsesGoldBadgeNotification and 'rbxassetid://206410289'
+					or Settings.DefaultBadgeNotificationImage
+	end
 
 	return {
-		Title = SETTINGS.NotificationTitle:format(
+		Title = Settings.NotificationTitle:format(
 			badgeInfo.Name
-		);
-		Text = SETTINGS.NotificationDescription:format(
+		),
+		Text = Settings.NotificationDescription:format(
 			badgeInfo.Name
-		);
-		Icon = imageURL;
-		Duration = SETTINGS.notificationDuration;
+		),
+		Icon = imageURL,
+		Duration = Settings.NotificationDuration
 	}
 end
 
@@ -206,14 +217,14 @@ function BadgeService3:LoadProfile(player, badgeData)
 	if (typeof(badgeData) == 'table') or (badgeData == nil) then
 		badgeData = badgeData or {}
 	else
-		warn("BadgeService3: :LoadProfile was called with invalid data, it instead resulted in no data.")
+		warn("BadgeService3: :LoadProfile was called with invalid data, it instead resulted in no data. Player:", player, "Invalid Data:", badgeData)
 		badgeData = {}
 	end
 
 	local badgeProfile = setmetatable({
-		Data = badgeData;
-		OnUpdate = Signal.new('OnUpdate');
-		OnBadgeAwarded = Signal.new('OnBadgeAwarded');
+		Data = badgeData,
+		OnUpdate = Signal.new("OnUpdate"),
+		OnBadgeAwarded = Signal.new("OnBadgeAwarded"),
 		_player = player;
 	}, BadgeProfile)
 
@@ -221,10 +232,10 @@ function BadgeService3:LoadProfile(player, badgeData)
 	badgeProfile.onBadgeAwarded = badgeProfile.OnBadgeAwarded
 
 	BADGE_PROFILES[player] = badgeProfile
-	ON_BADGE_PROFILE_LOADED:Fire()
+	ON_BADGE_PROFILE_LOADED:Fire(badgeProfile)
 
 	badgeProfile:OnBadgeAwarded(function(badgeId)
-		if SETTINGS.isNotificationsDisabled then return end;
+		if Settings.IsNotificationsDisabled then return end;
 
 		Remote_Notification:FireClient(
 			player,
@@ -255,11 +266,11 @@ function BadgeService3:WaitForProfile(player)
 	if BADGE_PROFILES[player] then return BADGE_PROFILES[player] end;
 
 	while true do
-		local badgeProfile = ON_BADGE_PROFILE_LOADED:Wait() and BADGE_PROFILES[player]
-		if badgeProfile and badgeProfile._player == player then
+		local badgeProfile = ON_BADGE_PROFILE_LOADED:Wait()
+		if badgeProfile._player == player then
 			return badgeProfile
 		end
-		
+
 		if player.Parent ~= Players then return end;
 	end
 end
@@ -282,18 +293,22 @@ end
 
 function BadgeService3:SetGlobalSettings(changedSettings)
 	for index, value in pairs(changedSettings) do
-		if typeof(value) == typeof(SETTINGS[index]) then
-			SETTINGS[index] = value
+		if typeof(value) == typeof(Settings[index]) then
+			Settings[index] = value
 		end
 	end
 end
 
 
-
 function BadgeProfile:AwardBadge(badgeId)
 	assert(
+		typeof(badgeId) == 'string',
+		"BadgeId must be string!"
+	)
+
+	assert(
 		Badges[badgeId],
-		("%s is not a valid BadgeID, are you sure you typed it correctly?"):format(badgeId)
+		(badgeId .." is not a valid BadgeID, are you sure you typed it correctly?")
 	)
 
 	if self._player.Parent ~= Players then return end;
@@ -339,8 +354,13 @@ end
 
 function BadgeProfile:OwnsBadge(badgeId)
 	assert(
+		typeof(badgeId) == 'string',
+		"BadgeId must be string!"
+	)
+
+	assert(
 		Badges[badgeId],
-		("%s is not a valid BadgeID, are you sure you typed it correctly?"):format(badgeId)
+		(badgeId .." is not a valid BadgeID, are you sure you typed it correctly?")
 	)
 
 	ConvertTrueDictionaryToArray(self)
@@ -350,7 +370,7 @@ end
 
 function BadgeProfile:GetOwnedBadges()
 	ConvertTrueDictionaryToArray(self)
-	
+
 	return ShallowCopy(self.Data)
 end
 
@@ -362,16 +382,16 @@ end
 BadgeProfile.Remove = BadgeProfile.Destroy
 
 function BadgeProfile:Optimize()
-	--\\ Only here for older code to work. Won't do anything. (as it's not needed!)
+	ConvertTrueDictionaryToArray(self)
 end
 
 Players.PlayerRemoving:Connect(function(player)
 	RunService.Heartbeat:Wait()
-	--\\ Allow other PlayerRemoving events to run first;
-	
+	--\\ Allow other PlayerRemoving events to run first
+
 	local badgeProfile = BADGE_PROFILES[player]
 	if not badgeProfile then return end;
-	
+
 	badgeProfile:Destroy()
 end)
 
