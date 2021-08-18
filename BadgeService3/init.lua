@@ -331,8 +331,13 @@ end
 
 function BadgeProfile:RemoveBadge(badgeId)
 	assert(
+		typeof(badgeId) == 'string',
+		"BadgeId must be string!"
+	)
+
+	assert(
 		Badges[badgeId],
-		("%s is not a valid BadgeID, are you sure you typed it correctly?"):format(badgeId)
+		(badgeId .." is not a valid BadgeID, are you sure you typed it correctly?")
 	)
 
 	if self._player.Parent ~= Players then return end;
