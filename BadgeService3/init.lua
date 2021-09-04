@@ -101,7 +101,7 @@
 
 			\\ Should be used for custom notification integration.
 
-		Version: 3.3.0 (04/09/2021)
+		Version: 3.4.0 (04/09/2021)
 						DD/MM/YYYY
 ]]
 
