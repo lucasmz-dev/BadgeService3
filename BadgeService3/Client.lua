@@ -1,9 +1,8 @@
 local StarterGui = game:GetService("StarterGui")
+local BadgeService3 = script.Parent
 
-script.Parent
-	:WaitForChild("Notification")
-	.OnClientEvent:Connect(function(info)
-		StarterGui:SetCore("SendNotification", info)
-	end)
+local NotificationEvent: RemoteEvent = BadgeService3:WaitForChild("Notification")
 
-return true;
+return NotificationEvent.OnClientEvent:Connect(function(notificationData)
+	StarterGui:SetCore("SendNotification", notificationData)
+end)
