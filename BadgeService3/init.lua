@@ -120,22 +120,24 @@ local Players = game:GetService("Players")
 local Signal = require(script.Signal)
 local Badges = require(script.Badges)
 
-local BADGE_COUNT = nil
-local BADGE_PROFILES = {}
-local ON_BADGE_PROFILE_LOADED = Signal.new()
-
 local BadgeService3 = {}
 
 local BadgeProfile = {}
 BadgeProfile.__index = BadgeProfile
 
---\\ Init:
+local BadgeCount = nil
+local BadgeProfiles = {}
+local OnBadgeProfileLoaded = Signal.new()
 
-local Remote_Notification = script:FindFirstChild("Notification") or Instance.new("RemoteEvent")
-Remote_Notification.Name = "Notification"
-Remote_Notification.Parent = script
+local NotificationRemote do
+	NotificationRemote = script:FindFirstChild("Notification")
 
---\\ Private functions:
+	if NotificationRemote == nil then
+		NotificationRemote = Instance.new("RemoteEvent")
+		NotificationRemote.Name = "Notification"
+		NotificationRemote.Parent = script
+	end
+end
 
 local function ShallowCopy(t)
 	local copy = table.create(#t)
@@ -203,7 +205,6 @@ local function GetNotificationData(badgeId)
 	}
 end
 
---\\ Public functions
 
 function BadgeService3:LoadProfile(player, badgeData)
 	assert(
@@ -211,7 +212,12 @@ function BadgeService3:LoadProfile(player, badgeData)
 		"Invalid :WaitForProfile parameter."
 	)
 
-	if BADGE_PROFILES[player] then return BADGE_PROFILES[player] end;
+	do
+		local badgeProfile = BadgeProfiles[player]
+		if badgeProfile then
+			return badgeProfile
+		end
+	end
 
 	if (typeof(badgeData) == 'table') or (badgeData == nil) then
 		badgeData = badgeData or {}
@@ -230,13 +236,13 @@ function BadgeService3:LoadProfile(player, badgeData)
 	badgeProfile.onUpdate = badgeProfile.OnUpdate
 	badgeProfile.onBadgeAwarded = badgeProfile.OnBadgeAwarded
 
-	BADGE_PROFILES[player] = badgeProfile
-	ON_BADGE_PROFILE_LOADED:Fire(badgeProfile)
+	BadgeProfiles[player] = badgeProfile
+	OnBadgeProfileLoaded:Fire(badgeProfile)
 
-	badgeProfile:OnBadgeAwarded(function(badgeId)
+	badgeProfile.OnBadgeAwarded:Connect(function(badgeId)
 		if Settings.IsNotificationsDisabled then return end;
 
-		Remote_Notification:FireClient(
+		NotificationRemote:FireClient(
 			player,
 			GetNotificationData(badgeId)
 		)
@@ -252,7 +258,7 @@ function BadgeService3:FindFirstProfile(player)
 	)
 	if player.Parent ~= Players then return end;
 
-	return BADGE_PROFILES[player]
+	return BadgeProfiles[player]
 end
 
 function BadgeService3:WaitForProfile(player)
@@ -262,10 +268,16 @@ function BadgeService3:WaitForProfile(player)
 	)
 
 	if player.Parent ~= Players then return end;
-	if BADGE_PROFILES[player] then return BADGE_PROFILES[player] end;
+	
+	do
+		local badgeProfile = BadgeProfiles[player]
+		if badgeProfile then
+			return badgeProfile
+		end
+	end
 
 	while true do
-		local badgeProfile = ON_BADGE_PROFILE_LOADED:Wait()
+		local badgeProfile = OnBadgeProfileLoaded:Wait()
 		if badgeProfile._player == player then
 			return badgeProfile
 		end
@@ -275,19 +287,19 @@ function BadgeService3:WaitForProfile(player)
 end
 
 function BadgeService3:GetBadgeCount()
-	if BADGE_COUNT then
-		return BADGE_COUNT
+	if BadgeCount then
+		return BadgeCount
 	end
 
-	BADGE_COUNT = 0
+	BadgeCount = 0
 	for _ in pairs(Badges) do
-		BADGE_COUNT += 1
+		BadgeCount += 1
 	end
-	return BADGE_COUNT
+	return BadgeCount
 end
 
 function BadgeService3:GetBadges()
-	return Badges, BADGE_COUNT or self:GetBadgeCount()
+	return Badges, BadgeCount or self:GetBadgeCount()
 end
 
 function BadgeService3:SetGlobalSettings(changedSettings)
@@ -378,7 +390,7 @@ function BadgeProfile:GetOwnedBadges()
 end
 
 function BadgeProfile:Destroy()
-	BADGE_PROFILES[self._player] = nil
+	BadgeProfiles[self._player] = nil
 	self.OnUpdate:Destroy()
 	self.OnBadgeAwarded:Destroy()
 end
@@ -393,7 +405,7 @@ Players.PlayerRemoving:Connect(function(player)
 	coroutine.yield()
 	--\\ Allow other PlayerRemoving events to run first
 
-	local badgeProfile = BADGE_PROFILES[player]
+	local badgeProfile = BadgeProfiles[player]
 	if not badgeProfile then return end;
 
 	badgeProfile:Destroy()
