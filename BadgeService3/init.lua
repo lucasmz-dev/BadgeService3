@@ -101,7 +101,7 @@
 
 			\\ Should be used for custom notification integration.
 
-		Version: 3.2.0 (17/08/2021)
+		Version: 3.3.0 (04/09/2021)
 						DD/MM/YYYY
 ]]
 
@@ -115,6 +115,7 @@ local Settings = {
 	NotificationTitle =                 "Badge Awarded!"
 }
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local Signal = require(script.Signal)
 local Badges = require(script.Badges)
