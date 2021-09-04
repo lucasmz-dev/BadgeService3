@@ -5,7 +5,7 @@
 
 			.new()
 				Returns: Signal
-				
+
 				Description:
 					\\ Creates a new Signal object.
 
@@ -38,7 +38,7 @@
 			:Destroy()
 				Description:
 					\\ Destroys a ScriptSignal, all connections are then disconnected.
-			
+
 			:DisconnectAll()
 				Description:
 					\\ Disconnects all connections without destroying the Signal.
@@ -58,7 +58,7 @@
 		Properties:
 
 			.Connected
-							
+
 		Functions:
 
 			:Disconnect()
@@ -85,50 +85,40 @@
 				end)
 
 			Note that you shouldn't call a Signal unless it's being used in this form.
-			
+
 ]]
 
-local t_insert = table.insert
-local c_running = coroutine.running
-local c_yield = coroutine.yield
-local t_defer = task.defer
-local t_desynchronize = task.desynchronize
 
-local ERROR_ON_ALREADY_DISCONNECTED = false
-local TOSTRING_ENABLED = true
+local function assert(condition: any, errorMessage: string)
+	-- Assert function which errors on top of the
+	-- function on which assert was called on.
+	-- Assert usually errors on the function it was called, not on the top one.
 
-local Signal = {}
+	if condition then
+		return
+	end
+
+	error(errorMessage, 3)
+end
+
+local ErrorsOnAlreadyConnected = false
+local IsToStringEnabled = true
+
+local Signal  = {}
 Signal.__index = Signal
 
 local Connection = {}
 Connection.__index = Connection
 
-local function CleanDisconnections(self)
-	--\\ Fired whenever all connections from a signal are fired,
-	--   handles empty-ing connections.
-
-	local _disconnections = self._disconnections
-	if _disconnections == nil then
-		return
-	end
-	
-	self._disconnections = nil
-	self._firing -= 1
-
-	for _, connection in ipairs(_disconnections) do
-		connection._next = nil
-		connection._func = nil
-	end
-end
-
 function Signal.new(name)
-	local self = setmetatable({
-		_name = typeof(name) == 'string' and name or "",
-		_active = true,
-		_head = nil,
-		_firing = 0,
-		_disconnections = nil
-	}, Signal)
+	local self = setmetatable(
+		{
+			_name = typeof(name) == 'string' and name or "",
+			_active = true,
+			_head = nil
+		},
+		Signal
+	)
 
 	return self
 end
@@ -138,22 +128,28 @@ function Signal:IsActive()
 end
 
 local function Connect(self, func, is_wait)
-	if not self:IsActive() then
-		return setmetatable({
-			Connected = false
-		}, Connection)
+	if self._active == false then
+		return setmetatable(
+			{
+				Connected = false
+			},
+			Connection
+		)
 	end
 
 	local _head = self._head
 
-	local connection = setmetatable({
-		Connected = true,
-		_func = func,
-		_signal = self,
-		_next = _head,
-		_prev = nil,
-		_is_wait = is_wait
-	}, Connection)
+	local connection = setmetatable(
+		{
+			Connected = true,
+			_func = func,
+			_signal = self,
+			_next = _head,
+			_prev = nil,
+			_is_wait = is_wait
+		},
+		Connection
+	)
 
 	if _head ~= nil then
 		_head._prev = connection
@@ -167,7 +163,7 @@ end
 function Signal:Connect(func)
 	assert(
 		typeof(func) == 'function',
-		":Connect must be called with a function ".. self._name
+		":Connect must be called with a function -".. self._name
 	)
 
 	return Connect(self, func)
@@ -176,18 +172,18 @@ end
 function Signal:ConnectParallel(func)
 	assert(
 		typeof(func) == 'function',
-		":ConnectParallel must be called with a function ".. self._name
+		":ConnectParallel must be called with a function -".. self._name
 	)
 
 	return Connect(self, function(...)
-		t_desynchronize()
+		task.desynchronize()
 		func(...)
 	end)
 end
 
 function Connection:Disconnect()
-	if not self.Connected then
-		if ERROR_ON_ALREADY_DISCONNECTED then
+	if self.Connected == false then
+		if ErrorsOnAlreadyConnected then
 			error("Can't disconnect twice", 2)
 		end
 
@@ -206,89 +202,65 @@ function Connection:Disconnect()
 
 	if _prev ~= nil then
 		_prev._next = _next
-	else
-		--\\ This connection was the _head,
-		--   therefore we need to update the head
-		--   to the connection after this one.
-
+	else -- Connection is _head
 		_signal._head = _next
 	end
-	
-	--\\ Safe to always wipe references to:
 
+	self._func = nil
 	self._signal = nil
+	self._next = nil
 	self._prev = nil
-
-	local _disconnections = _signal._disconnections
-	if _signal._firing ~= 0 then
-		if _disconnections == nil then
-			_disconnections = {}
-			_signal._disconnections = _disconnections
-		end
-		t_insert(_disconnections, self)
-		return
-		--\\ Schedule to be fully cleaned up later.
-
-	else
-		self._func = nil
-		self._next = nil
-	end
 end
 
 function Signal:Wait()
 	Connect(
 		self,
-		c_running(),
+		coroutine.running(),
 		true
 	)
 
-	return c_yield()
+	return coroutine.yield()
 end
 
-
 function Signal:Fire(...)
-	if not self:IsActive() then
-		warn("Tried to :Fire destroyed signal ".. self._name)
+	if self._active == false then
+		warn("Tried to :Fire destroyed signal -".. self._name)
 		return
 	end
-	self._firing += 1
 
 	local connection = self._head
 	while connection ~= nil do
-		t_defer(
+		task.defer(
 			connection._func,
 			...
 		)
-		
+
 		if connection._is_wait then
+			local nextConnection = connection._next
+
 			connection:Disconnect()
+
+			connection = nextConnection
+			continue
 		end
 
 		connection = connection._next
 	end
-
-	t_defer(
-		CleanDisconnections,
-		self
-	)
 end
 
 function Signal:DisconnectAll()
-	self._firing += 1 --\\ Tag it as firing, we need _next in this case.
-
 	local connection = self._head
 	while connection ~= nil do
+		local nextConnection = connection._next
+
 		connection:Disconnect()
 
-		connection = connection._next
+		connection = nextConnection
 	end
-	self._head = nil
-
-	t_defer(CleanDisconnections, self)
 end
 
 function Signal:Destroy()
-	if not self:IsActive() then
+	if self._active == false then
 		return
 	end
 
@@ -312,19 +284,22 @@ end
 function Signal:__tostring()
 	return "Signal ".. self._name
 end
-if not TOSTRING_ENABLED then
+
+if IsToStringEnabled == false then
 	Signal.__tostring = nil
 end
 
 function Signal:__call(_, func)
-	if not self:IsActive() then
-		return
-	end
-
 	assert(
 		typeof(func) == 'function',
-		":Connect must be called with a function ".. self._name
+		":Connect must be called with a function -".. self._name
 	)
+
+	if self._active == false then
+		return setmetatable({
+			Connected = false
+		}, Connection)
+	end
 
 	return Connect(self, func)
 end
