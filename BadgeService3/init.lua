@@ -116,11 +116,10 @@ local Settings = {
 }
 
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local Signal = require(script.Signal)
 local Badges = require(script.Badges)
 
-local BADGE_COUNT
+local BADGE_COUNT = nil
 local BADGE_PROFILES = {}
 local ON_BADGE_PROFILE_LOADED = Signal.new()
 
@@ -298,7 +297,6 @@ function BadgeService3:SetGlobalSettings(changedSettings)
 	end
 end
 
-
 function BadgeProfile:AwardBadge(badgeId)
 	assert(
 		typeof(badgeId) == 'string',
@@ -369,7 +367,7 @@ function BadgeProfile:OwnsBadge(badgeId)
 
 	ConvertTrueDictionaryToArray(self)
 
-	return table.find(self.Data) and true
+	return table.find(self.Data, badgeId) and true
 end
 
 function BadgeProfile:GetOwnedBadges()
@@ -390,7 +388,8 @@ function BadgeProfile:Optimize()
 end
 
 Players.PlayerRemoving:Connect(function(player)
-	RunService.Heartbeat:Wait()
+	task.defer(coroutine.running())
+	coroutine.yield()
 	--\\ Allow other PlayerRemoving events to run first
 
 	local badgeProfile = BADGE_PROFILES[player]
